@@ -1,0 +1,17 @@
+airman-mcp
+Copyright (c) 2026 Giulio Calacoci and contributors
+
+This project continues pg-airman-mcp, originally published by EnterpriseDB
+Corporation at https://github.com/EnterpriseDB/pg-airman-mcp (MIT License,
+last release 1.1.1, commit 363ce20).
+
+pg-airman-mcp was itself derived from Postgres MCP Pro by Crystal Corp.,
+https://github.com/crystaldba/postgres-mcp (MIT License,
+Copyright (c) 2025, Crystal Corp.).
+
+The original copyright notices in LICENSE are retained. All code is
+distributed under the MIT License; see LICENSE.
+
+"EnterpriseDB" and "EDB" are trademarks of EnterpriseDB Corporation. This
+project is not affiliated with or endorsed by EnterpriseDB Corporation or
+Crystal Corp.

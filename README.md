@@ -4,6 +4,12 @@
 
 **[Overview](#overview)** • **[Quick Start](#quick-start)** • **[Configuration Reference](#configuration-reference)** • **[Technical Notes](#technical-notes)** • **[MCP API](#mcp-server-api)** • **[FAQ](#frequently-asked-questions)**
 
+> **Community continuation.** This project continues
+> [EnterpriseDB/pg-airman-mcp](https://github.com/EnterpriseDB/pg-airman-mcp), which is no
+> longer maintained. From 1.2.0 the Python package is published as **`airman-mcp`**
+> (the last release under the old name is `pg-airman-mcp` 1.1.1). The command is still
+> `pg-airman-mcp`. See [NOTICE](NOTICE) for credits.
+
 ## Overview
 
 **Pg Airman MCP** is an open source Model Context Protocol (MCP) server built to support you and your AI agents throughout the **entire development process**—from initial coding, through testing and deployment, and to production tuning and maintenance.
@@ -62,13 +68,13 @@ docker pull enterprisedb/pg-airman-mcp
 If you have `pipx` installed you can install Pg Airman MCP with:
 
 ```bash
-pipx install pg-airman-mcp
+pipx install airman-mcp
 ```
 
 Otherwise, install Pg Airman MCP with `uv`:
 
 ```bash
-uv pip install pg-airman-mcp
+uv pip install airman-mcp
 ```
 
 If you need to install `uv`, see the [uv installation instructions](https://docs.astral.sh/uv/getting-started/installation/).
