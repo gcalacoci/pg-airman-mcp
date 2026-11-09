@@ -65,11 +65,26 @@ def obfuscate_password(text: str | None) -> str | None:
 class DbConnPool:
     """Database connection manager using psycopg's connection pool."""
 
-    def __init__(self, connection_url: str | None = None):
+    def __init__(
+        self, connection_url: str | None = None, search_path: str | None = None
+    ):
         self.connection_url = connection_url
+        # Applied to each new pooled connection (session level), when set
+        self.search_path = search_path
         self.pool: AsyncConnectionPool | None = None
         self._is_valid = False
         self._last_error = None
+
+    async def _configure_connection(self, conn) -> None:
+        """Set the configured search_path on a new pooled connection.
+
+        set_config(..., false) is session level, so it survives the
+        transactions the drivers open on this connection later.
+        """
+        await conn.execute(
+            "SELECT set_config('search_path', %s, false)", [self.search_path]
+        )
+        await conn.commit()
 
     async def pool_connect(
         self, connection_url: str | None = None
@@ -96,6 +111,7 @@ class DbConnPool:
                 min_size=1,
                 max_size=5,
                 open=False,  # Don't connect immediately, let's do it explicitly
+                configure=self._configure_connection if self.search_path else None,
             )
 
             # Open the pool explicitly

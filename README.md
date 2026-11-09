@@ -696,6 +696,17 @@ When compared to procedural code, however, they can be slow, expensive, non-dete
 In the case of database tuning, we have well established algorithms, developed over decades, that are proven to work.
 Pg Airman MCP lets you combine the best of both worlds by pairing LLMs with classical optimization algorithms and other procedural tools.
 
+*My tables are not in the `public` schema. Why do queries fail with "relation does not exist"?*
+Postgres resolves an unqualified table name such as `orders` only through the `search_path`, which by default is `"$user", public`.
+Either write the schema in the query (`sales.orders`), or set the search path for the server:
+
+```bash
+AIRMAN_MCP_SEARCH_PATH="sales,public"   # or --search-path "sales,public"
+```
+
+The same works from the connection URL: `postgresql://user:pass@host/db?options=-csearch_path%3Dsales,public`.
+Index tuning keeps the schema of schema-qualified tables, so recommendations come back as `CREATE INDEX ... ON sales.orders ...`.
+
 *How do you test Pg Airman MCP?*
 Testing is critical to ensuring that Pg Airman MCP is reliable and accurate.
 We are building out a suite of AI-generated adversarial workloads designed to challenge Pg Airman MCP and ensure it performs under a broad variety of scenarios.
@@ -747,6 +758,7 @@ Environment variables use the `AIRMAN_MCP_` prefix.
 | `AIRMAN_MCP_DNS_REBINDING_PROTECTION` | `--dns-rebinding-protection` | Enable DNS rebinding protection | `false` |
 | `AIRMAN_MCP_ALLOWED_HOSTS` | `--allowed-hosts` | Comma-separated allowed Host header values | *(empty)* |
 | `AIRMAN_MCP_PURPOSE` | `--purpose` | Static purpose label for governance logging | *(none)* |
+| `AIRMAN_MCP_SEARCH_PATH` | `--search-path` | `search_path` set on every database connection, e.g. `sales,public` | *(role default)* |
 | `AIRMAN_MCP_TRACING` | `--tracing` | Enable session token tracing via application_name | `false` |
 | `AIRMAN_MCP_ALLOWED_ORIGINS` | `--allowed-origins` | Comma-separated allowed Origin header values | *(empty)* |
 

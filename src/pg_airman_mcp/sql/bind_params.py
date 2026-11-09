@@ -41,10 +41,21 @@ class TableAliasVisitor(Visitor):
     def visit_RangeVar(self, ancestors: list[Node], node: Node) -> None:  # noqa: N802
         """Visit table references, including those in FROM clause."""
         if isinstance(node, RangeVar):  # Type narrowing for RangeVar
-            if node.relname is not None:
-                self.tables.add(node.relname)
+            if node.relname is None:
+                return
+            # Keep the schema so later steps (index candidates, catalog
+            # lookups) work for tables outside the search_path.
+            table = (
+                f"{node.schemaname}.{node.relname}"
+                if node.schemaname
+                else str(node.relname)
+            )
+            self.tables.add(table)
             if node.alias and node.alias.aliasname is not None:
-                self.aliases[node.alias.aliasname] = str(node.relname)
+                self.aliases[node.alias.aliasname] = table
+            elif node.schemaname:
+                # "FROM sales.orders ... WHERE orders.col" refers to it too
+                self.aliases[str(node.relname)] = table
 
     def visit_JoinExpr(self, ancestors: list[Node], node: Node) -> None:  # noqa: N802
         """Visit both sides of JOIN expressions."""
@@ -203,7 +214,13 @@ class ColumnCollector(Visitor):
                 self.context_stack[-1] if self.context_stack else ({}, {})
             )
 
-            if len(fields) == 2:  # Qualified column (e.g., u.name)
+            if len(fields) == 3:  # Schema-qualified column (sales.orders.id)
+                schema, rel, column = fields
+                table = f"{schema}.{rel}"
+                if table not in self.columns:
+                    self.columns[table] = set()
+                self.columns[table].add(column)
+            elif len(fields) == 2:  # Qualified column (e.g., u.name)
                 table_or_alias, column = fields
                 table = current_aliases.get(table_or_alias, table_or_alias)
                 if table not in self.columns:

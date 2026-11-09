@@ -18,6 +18,7 @@ from ..sql import (
     TableAliasVisitor,
     check_hypopg_installation_status,
 )
+from ..sql.index import split_table_name
 
 logger = logging.getLogger(__name__)
 
@@ -508,10 +509,15 @@ class IndexTuningBase(ABC):
         visitor(stmt)
 
         # Skip queries that only access system tables
-        if all(
-            table.startswith("pg_") or table.startswith("aurora_")
-            for table in visitor.tables
-        ):
+        def _is_system(table: str) -> bool:
+            schema, rel = split_table_name(table)
+            return (
+                schema in ("pg_catalog", "information_schema")
+                or rel.startswith("pg_")
+                or rel.startswith("aurora_")
+            )
+
+        if all(_is_system(table) for table in visitor.tables):
             return False
         return True
 
@@ -589,16 +595,21 @@ class IndexTuningBase(ABC):
 
         try:
             # Use parameterized query instead of f-string for security
+            schema, rel = split_table_name(table)
             stats_query = """
             SELECT COALESCE(SUM(avg_width), 0) AS total_width,
                    COALESCE(SUM(n_distinct), 0) AS total_distinct
             FROM pg_stats
             WHERE tablename = {} AND attname = ANY({})
             """
+            params: list[Any] = [rel, columns]
+            if schema:
+                stats_query += " AND schemaname = {}"
+                params.append(schema)
             result = await SafeSqlDriver.execute_param_query(
                 self.sql_driver,
                 stats_query,
-                [table, columns],
+                params,
             )
             if result and result[0].cells:
                 size_estimate = self._estimate_index_size_internal(

@@ -2,6 +2,12 @@ from dataclasses import dataclass
 from typing import Any
 
 
+def split_table_name(table: str) -> tuple[str | None, str]:
+    """Split ``schema.table`` into ``(schema, table)``; ``(None, table)`` if bare."""
+    schema, sep, name = table.rpartition(".")
+    return (schema, name) if sep else (None, table)
+
+
 @dataclass(frozen=True)
 class IndexDefinition:
     """Immutable index configuration for hashing."""
@@ -50,7 +56,8 @@ class IndexDefinition:
 
         column_part = "_".join(cleaned_columns)
         suffix = "" if self.using == "btree" else f"_{self.using}"
-        base = f"enterprisedb_idx_{self.table}_{column_part}_{len(self.columns)}"
+        table_part = self.table.replace(".", "_")
+        base = f"enterprisedb_idx_{table_part}_{column_part}_{len(self.columns)}"
         return f"{base}{suffix}"
 
     def __str__(self) -> str:

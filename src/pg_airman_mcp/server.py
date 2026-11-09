@@ -311,6 +311,14 @@ class ServerSettings(BaseSettings):
         "autocommit SET so it persists on idle pool connections.",
     )
 
+    # Connection
+    search_path: str | None = Field(
+        default=None,
+        description="search_path for every database connection "
+        "(e.g. 'sales,public'), so tables outside 'public' resolve "
+        "without a schema prefix",
+    )
+
     # DNS rebinding protection
     dns_rebinding_protection: bool = Field(
         default=False,
@@ -343,6 +351,14 @@ class ServerSettings(BaseSettings):
         if v.lower() not in allowed:
             raise ValueError(f"transport must be one of {allowed}, got: {v}")
         return v.lower()
+
+    @field_validator("search_path")
+    @classmethod
+    def validate_search_path(cls, v: str | None) -> str | None:
+        """Treat a blank search_path as unset."""
+        if v is None or not v.strip():
+            return None
+        return v.strip()
 
     @field_validator("purpose")
     @classmethod
@@ -665,6 +681,15 @@ def create_mcp_server(
     logger.info(f"MCP server created {auth_status}")
 
     return server
+
+
+# Appended to the execute_sql description: tables outside the search_path
+# need their schema (gcalacoci/pg-airman-mcp#1).
+_SCHEMA_HINT = (
+    " Qualify tables outside the search_path with their schema"
+    " (e.g. sales.orders); list_schemas and list_objects show where"
+    " tables live."
+)
 
 
 async def get_sql_driver() -> SqlDriver | SafeSqlDriver:
@@ -1690,6 +1715,13 @@ Environment Variables:
         "Sets application_name in PostgreSQL when set.",
     )
     parser.add_argument(
+        "--search-path",
+        type=str,
+        default=settings.search_path,
+        help="search_path set on every database connection "
+        "(e.g. 'sales,public'). Default: the role's own search_path.",
+    )
+    parser.add_argument(
         "--tracing",
         action=argparse.BooleanOptionalAction,
         default=settings.tracing,
@@ -1713,6 +1745,7 @@ Environment Variables:
     settings.allowed_hosts = args.allowed_hosts
     settings.allowed_origins = args.allowed_origins
     settings.purpose = args.purpose
+    settings.search_path = args.search_path
     settings.tracing = args.tracing
 
     # Auth CLI overrides (delegated to auth_config)
@@ -1769,9 +1802,15 @@ Environment Variables:
 
     # Add the query tool with a description appropriate to the access mode
     if current_access_mode == AccessMode.UNRESTRICTED:
-        mcp.add_tool(execute_sql, description="Execute any SQL query")
+        mcp.add_tool(
+            execute_sql,
+            description="Execute any SQL query." + _SCHEMA_HINT,
+        )
     else:
-        mcp.add_tool(execute_sql, description="Execute a read-only SQL query")
+        mcp.add_tool(
+            execute_sql,
+            description="Execute a read-only SQL query." + _SCHEMA_HINT,
+        )
 
     tool_count = len(await mcp.list_tools())
     logger.info(
@@ -1800,6 +1839,10 @@ Environment Variables:
             f"Purpose '{settings.purpose}' set — "
             f"application_name '{app_name_value}' injected into connection URL"
         )
+
+    if settings.search_path:
+        db_connection.search_path = settings.search_path
+        logger.info(f"search_path '{settings.search_path}' set on every connection")
 
     # Initialize database connection pool
     try:

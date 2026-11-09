@@ -7,6 +7,7 @@ import humanize
 from pglast.ast import ColumnRef, JoinExpr, Node, SelectStmt
 
 from ..sql import ColumnCollector, SafeSqlDriver, SqlDriver, TableAliasVisitor
+from ..sql.index import split_table_name
 from .index_opt_base import IndexRecommendation, IndexTuningBase, candidate_str, pp_list
 
 logger = logging.getLogger(__name__)
@@ -492,12 +493,16 @@ class DatabaseTuningAdvisor(IndexTuningBase):
                 table_columns.add((candidate.table, column))
 
         # Create a list of table names for the query
-        tables_array = ",".join(f"'{table}'" for table, _ in table_columns)
+        requested_tables = {table for table, _ in table_columns}
+        tables_array = ",".join(
+            f"'{split_table_name(table)[1]}'" for table in requested_tables
+        )
         columns_array = ",".join(f"'{col}'" for _, col in table_columns)
 
         # Query to get column types and their length limits from catalog
         type_query = f"""
             SELECT
+                c.table_schema,
                 c.table_name,
                 c.column_name,
                 c.data_type,
@@ -513,6 +518,7 @@ class DatabaseTuningAdvisor(IndexTuningBase):
                 END as potential_long_text
             FROM information_schema.columns c
             LEFT JOIN pg_stats ON
+                pg_stats.schemaname = c.table_schema AND
                 pg_stats.tablename = c.table_name AND
                 pg_stats.attname = c.column_name
             WHERE c.table_name IN ({tables_array})
@@ -532,23 +538,23 @@ class DatabaseTuningAdvisor(IndexTuningBase):
         potential_problematic_columns = set()
 
         for row in result:
-            table = row.cells["table_name"]
             column = row.cells["column_name"]
             potential_long = row.cells["potential_long_text"]
             avg_width = row.cells.get("avg_width")
-
-            # Use avg_width from pg_stats as a heuristic - if it's high,
-            # likely contains long text
-            if potential_long and (
-                avg_width is None or avg_width > max_text_length * 0.4
-            ):
-                problematic_columns.add((table, column))
-                logger.debug(
-                    f"Identified potentially long text column: {table}.{column} "
-                    f"(avg_width: {avg_width})"
+            # A row matches a bare candidate table by name, and a
+            # schema-qualified one only in that schema.
+            bare = row.cells["table_name"]
+            qualified = f"{row.cells.get('table_schema')}.{bare}"
+            for table in (t for t in (bare, qualified) if t in requested_tables):
+                self._classify_text_column(
+                    table,
+                    column,
+                    potential_long,
+                    avg_width,
+                    max_text_length,
+                    problematic_columns,
+                    potential_problematic_columns,
                 )
-            elif potential_long:
-                potential_problematic_columns.add((table, column))
 
         # Filter candidates based on column information
         filtered_candidates = []
@@ -569,6 +575,28 @@ class DatabaseTuningAdvisor(IndexTuningBase):
                 filtered_candidates.append(candidate)
 
         return filtered_candidates
+
+    @staticmethod
+    def _classify_text_column(
+        table: str,
+        column: str,
+        potential_long: bool,
+        avg_width: Any,
+        max_text_length: int,
+        problematic_columns: set[tuple[str, str]],
+        potential_problematic_columns: set[tuple[str, str]],
+    ) -> None:
+        """Sort one catalog column into problematic / potentially problematic."""
+        # Use avg_width from pg_stats as a heuristic - if it's high,
+        # likely contains long text
+        if potential_long and (avg_width is None or avg_width > max_text_length * 0.4):
+            problematic_columns.add((table, column))
+            logger.debug(
+                f"Identified potentially long text column: {table}.{column} "
+                f"(avg_width: {avg_width})"
+            )
+        elif potential_long:
+            potential_problematic_columns.add((table, column))
 
     async def _get_existing_indexes(self) -> list[dict[str, Any]]:
         """Get all existing indexes"""
@@ -649,12 +677,12 @@ class DatabaseTuningAdvisor(IndexTuningBase):
             else:
                 index_stmt = node
 
-            # Extract table name
-            if hasattr(index_stmt.relation, "relname"):
-                table_name = index_stmt.relation.relname
-            else:
-                # Extract from RangeVar
-                table_name = index_stmt.relation.RangeVar.relname
+            # Extract table name (and schema, when the definition has one)
+            relation = index_stmt.relation
+            if not hasattr(relation, "relname"):
+                relation = relation.RangeVar  # older pglast node layout
+            table_name = relation.relname
+            schema_name = getattr(relation, "schemaname", None)
 
             # Extract columns
             columns = []
@@ -678,6 +706,7 @@ class DatabaseTuningAdvisor(IndexTuningBase):
                 is_unique = index_stmt.unique
 
             return {
+                "schema": schema_name.lower() if schema_name else None,
                 "table": table_name.lower(),
                 "columns": [col.lower() for col in columns],
                 "type": index_type.lower(),
@@ -743,6 +772,11 @@ class DatabaseTuningAdvisor(IndexTuningBase):
 
         # Same table?
         if index1["table"] != index2["table"]:
+            return False
+
+        # Same schema? Only decidable when both definitions name one.
+        schema1, schema2 = index1.get("schema"), index2.get("schema")
+        if schema1 and schema2 and schema1 != schema2:
             return False
 
         # Same index type?
@@ -917,7 +951,14 @@ class ConditionColumnCollector(ColumnCollector):
                 self(alias_info["node"])
             return
 
-        if len(fields) == 2:  # Table.column format
+        if len(fields) == 3:  # schema.table.column format
+            schema, rel, column = fields
+            table = f"{schema}.{rel}"
+            if table not in self.condition_columns:
+                self.condition_columns[table] = set()
+            self.condition_columns[table].add(column)
+
+        elif len(fields) == 2:  # Table.column format
             table_or_alias, column = fields
             # Resolve alias to actual table
             table = aliases.get(table_or_alias, table_or_alias)
@@ -933,10 +974,8 @@ class ConditionColumnCollector(ColumnCollector):
             # For unqualified columns, check all tables in context
             found_match = False
             for table in tables:
-                # Skip schema qualification if present
-                if "." in table:
-                    _, table = table.split(".", 1)
-
+                # Keep any schema qualification: candidates must target
+                # the same relation the query reads.
                 # Add column to all tables that have it
                 if self._column_exists(table, column):
                     if table not in self.condition_columns:
