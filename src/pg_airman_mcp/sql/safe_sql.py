@@ -949,15 +949,21 @@ class SafeSqlDriver(SqlDriver):
                 # Skip attributes that don't exist (this is normal in pglast)
                 continue
 
-            # Handle lists and tuples of nodes
-            if isinstance(attr, list | tuple):
-                for item in attr:
-                    if isinstance(item, Node):
-                        self._validate_node(item)
+            self._validate_value(attr)
 
-            # Handle single nodes
-            elif isinstance(attr, Node):
-                self._validate_node(attr)
+    def _validate_value(self, value: object) -> None:
+        """Validate a node attribute: a node, or a list/tuple nested at any depth.
+
+        pglast keeps some nodes inside nested tuples, for example
+        RangeFunction.functions == ((FuncCall, None),) for a function in FROM.
+        Skipping the inner tuple let any function in FROM bypass the
+        allowlist (issue #5; upstream crystaldba/postgres-mcp#200).
+        """
+        if isinstance(value, Node):
+            self._validate_node(value)
+        elif isinstance(value, list | tuple):
+            for item in value:
+                self._validate_value(item)
 
     @staticmethod
     def _normalize_placeholders(query: str) -> str:
