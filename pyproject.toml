@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "mcp>=1.9.2,<2",
-    "psycopg[c]>=3.2.8",
+    "psycopg[binary]>=3.2.8",
     "humanize>=4.8.0",
     "pglast==7.22",
     "attrs>=25.3.0",
@@ -31,6 +31,11 @@ email = "bilge.ince@enterprisedb.com"
 
 [[project.maintainers]]
 name = "Giulio Calacoci"
+
+[project.optional-dependencies]
+# psycopg compiled against the system libpq: needs a C compiler, libpq headers
+# and pg_config. Use it where no psycopg binary wheel exists.
+c = ["psycopg[c]>=3.2.8"]
 
 [project.urls]
 Homepage = "https://github.com/gcalacoci/pg-airman-mcp"

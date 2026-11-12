@@ -10,9 +10,6 @@ ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy
 ENV UV_PYTHON_DOWNLOADS=0
 
 WORKDIR /app
-RUN apt-get update \
-  && apt-get install -y --no-install-recommends gcc libpq-dev python3-dev \
-  && rm -rf /var/lib/apt/lists/*
 RUN --mount=type=cache,target=/root/.cache/uv \
   --mount=type=bind,source=uv.lock,target=uv.lock \
   --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
@@ -32,7 +29,6 @@ FROM python:3.12-slim-bookworm
 RUN apt-get update && apt-get install -y --no-install-recommends \
   dnsutils \
   iputils-ping \
-  libpq5 \
   net-tools \
   && rm -rf /var/lib/apt/lists/* \
   && pip install --no-cache-dir --upgrade pip \
@@ -42,7 +38,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   && chown -R app:app /app
 
 # Clean up unnecessary packages installed by dependencies
-# Note: do NOT purge libldap-2.5-0 as libpq5 depends on it
 RUN apt-get purge -y libsqlite3-0 \
   && apt-get autoremove -y
 
@@ -52,11 +47,10 @@ ENV PATH="/app/.venv/bin:$PATH"
 
 ARG TARGETPLATFORM
 ARG BUILDPLATFORM
-LABEL org.opencontainers.image.description="Pg Airman MCP Agent - Multi-architecture container (${TARGETPLATFORM})"
-LABEL org.opencontainers.image.source="https://github.com/EnterpriseDB/pg-airman-mcp"
-LABEL org.opencontainers.image.licenses="Apache-2.0"
-LABEL org.opencontainers.image.vendor="EnterpriseDB"
-LABEL org.opencontainers.image.url="https://www.enterprisedb.com"
+LABEL org.opencontainers.image.description="airman-mcp, a Postgres MCP server (${TARGETPLATFORM})"
+LABEL org.opencontainers.image.source="https://github.com/gcalacoci/pg-airman-mcp"
+LABEL org.opencontainers.image.licenses="MIT"
+LABEL org.opencontainers.image.url="https://github.com/gcalacoci/pg-airman-mcp"
 
 COPY --chown=app:app --chmod=755 docker-entrypoint.sh /app/
 
