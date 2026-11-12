@@ -1125,7 +1125,8 @@ async def explain_query(
     analyze: bool = Field(
         description="When True, actually runs the query to show real execution "
         "statistics instead of estimates. "
-        "Takes longer but provides more accurate information.",
+        "Takes longer but provides more accurate information. "
+        "Not available in restricted mode, because it executes the query.",
         default=False,
     ),
     hypothetical_indexes: list[dict[str, Any]] = Field(

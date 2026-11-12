@@ -930,7 +930,11 @@ class SafeSqlDriver(SqlDriver):
         if isinstance(node, ExplainStmt):
             for option in node.options or []:
                 if isinstance(option, DefElem) and option.defname == "analyze":
-                    raise ValueError("EXPLAIN ANALYZE is not supported")
+                    raise ValueError(
+                        "EXPLAIN ANALYZE is not available in restricted mode "
+                        "because it executes the query; run EXPLAIN without "
+                        "ANALYZE instead"
+                    )
 
         # Reject CREATE EXTENSION statements
         if isinstance(node, CreateExtensionStmt):
@@ -1013,10 +1017,10 @@ class SafeSqlDriver(SqlDriver):
                             )
                     self._validate_node(stmt)
             except Exception as e:
-                raise ValueError(f"Error validating query: {query}") from e
+                raise ValueError(f"Error validating query: {e}. Query: {query}") from e
 
         except pglast.parser.ParseError as e:
-            raise ValueError("Failed to parse SQL statement") from e
+            raise ValueError(f"Failed to parse SQL statement: {e}") from e
 
     async def execute_query(
         self,
