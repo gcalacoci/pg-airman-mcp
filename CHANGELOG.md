@@ -6,8 +6,7 @@ All notable changes to this project are listed here. The format follows
 
 ## [1.2.0] - 2026-11-12
 
-First release of the community continuation, published on PyPI as
-`airman-mcp`. The command (`pg-airman-mcp`), the Python module
+First release of the independent community fork, renamed `airman-mcp`. The command (`pg-airman-mcp`), the Python module
 (`pg_airman_mcp`) and the configuration are unchanged.
 
 ### Security
@@ -29,12 +28,16 @@ First release of the community continuation, published on PyPI as
   on PyPI.
 
 ### Changed
-- Package renamed to `airman-mcp` on PyPI (was `pg-airman-mcp`).
+- The Python package is renamed `airman-mcp` (it was `pg-airman-mcp` on PyPI).
 - `mcp` is capped below 2.0, because mcp 2.x changes the imports this server
   uses (#4). Reported by @camball in crystaldba/postgres-mcp#187 and #237;
   upstream fix by @jssmith.
 - All other dependencies refreshed to current versions (#4), including the
   security updates from EnterpriseDB's pending Dependabot PRs.
+- The package depends on `psycopg[binary]`, so installing it needs no C
+  compiler or libpq headers. `psycopg[c]` moved to the optional `c` extra,
+  for platforms without a binary wheel (#9, #10). The Docker image no longer
+  installs build tools.
 - Added a `NOTICE` file crediting EnterpriseDB and Crystal DBA.
 
 ## [1.1.1] and earlier

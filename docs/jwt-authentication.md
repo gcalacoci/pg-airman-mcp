@@ -183,7 +183,7 @@ The verifier extracts the following from validated tokens:
         "-e", "AIRMAN_MCP_AUTH_SERVER_URL",
         "-e", "AIRMAN_MCP_JWT_ISSUER",
         "-e", "AIRMAN_MCP_SERVER_URL",
-        "enterprisedb/pg-airman-mcp",
+        "airman-mcp",
         "--access-mode=restricted"
       ],
       "env": {
@@ -201,6 +201,8 @@ The verifier extracts the following from validated tokens:
 
 ### JWT with Docker (SSE)
 
+The examples use the `airman-mcp` image built from a checkout (see the README, Install, Option A).
+
 ```bash
 docker run -p 8000:8000 \
   -e AIRMAN_MCP_DATABASE_URL=postgresql://user:pass@localhost:5432/dbname \
@@ -208,7 +210,7 @@ docker run -p 8000:8000 \
   -e AIRMAN_MCP_AUTH_TYPE=jwt \
   -e AIRMAN_MCP_AUTH_SERVER_URL=https://auth.example.com \
   -e AIRMAN_MCP_JWT_ISSUER=https://auth.example.com \
-  enterprisedb/pg-airman-mcp --access-mode=restricted --transport=sse
+  airman-mcp --access-mode=restricted --transport=sse
 ```
 
 ## Migrating from Introspection to JWT
